@@ -1,13 +1,43 @@
-FROM rust:1.62 as builder
+use lambda_runtime::{handler_fn, Context, Error};
+use serde::{Deserialize, Serialize};
+use tracing::{info, Level};
+use tracing_subscriber;
 
-WORKDIR /app
-COPY . .
+#[derive(Deserialize)]
+struct Request {
+    message: String,
+}
 
-RUN cargo build --release
+#[derive(Serialize)]
+struct Response {
+    message: String,
+}
 
-FROM debian:bullseye-slim
+async fn function_handler(event: Request, _: Context) -> Result<Response, Error> {
+    // Log request
+    info!("Received request: {}", event.message);
 
-WORKDIR /app
-COPY --from=builder /app/target/release/axum-greedy-coin /app/
+    let response_message = if event.message == "Marco" {
+        "Polo"
+    } else {
+        "I didn't hear Marco!"
+    };
 
-CMD ["./axum-greedy-coin"]
+    Ok(Response {
+        message: response_message.to_string(),
+    })
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Set up tracing for logging
+    tracing_subscriber::fmt()
+        .with_max_level(Level::INFO)
+        .init();
+
+    let func = handler_fn(function_handler);
+
+    lambda_runtime::run(func).await?;
+
+    Ok(())
+}
